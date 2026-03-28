@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from enum import Enum, auto
 from getpass import getpass
 import string
+from typing import Callable
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
@@ -32,7 +33,7 @@ MIN_PASSWORD_LENGTH = 8
 PASSWORD_HASHER = PasswordHasher()
 
 SYMBOLS = set(string.punctuation)
-CHARACTER_RULES = {
+CHARACTER_RULES: dict[str, Callable[[str], bool]] = {
     "Sua senha deve conter pelo menos uma letra maiúscula": str.isupper,
     "Sua senha deve conter pelo menos uma letra minúscula": str.islower,
     "Sua senha deve conter pelo menos um número": str.isdigit,
@@ -43,9 +44,9 @@ CHARACTER_RULES = {
 accounts: dict[str, Account] = {}
 login_attempts = 0
 consecutive_locks = 0
-locked_since = None
+locked_since: datetime | None = None
 current_state = AppState.MENU
-logged_account = None
+logged_account: Account | None = None
 
 
 def validate_password(password: str) -> tuple[bool, list[str]]:
@@ -77,24 +78,26 @@ def validate_password(password: str) -> tuple[bool, list[str]]:
 while current_state is not AppState.EXIT:
     match current_state:
         case AppState.LOCKED:
-            print()
+            assert locked_since is not None
             locked_until = locked_since + timedelta(
                 seconds=(
                     INITIAL_LOCK_TIME
                     + (consecutive_locks * CONSECUTIVE_LOCK_MULTIPLIER)
                 )
             )
-            now = datetime.now()
 
+            now = datetime.now()
             if locked_until > now:
                 remaining_time = locked_until - now
                 minutes, seconds = divmod(int(remaining_time.total_seconds()), 60)
+                print()
                 print(f"Você está bloqueado. Tente novamente em {minutes}m {seconds}s.")
                 _ = input("Pressione ENTER para atualizar o contador...")
-            else:
-                consecutive_locks += 1
-                login_attempts = 0
-                current_state = AppState.MENU
+                continue
+
+            consecutive_locks += 1
+            login_attempts = 0
+            current_state = AppState.MENU
 
         case AppState.MENU:
             print("\n--- Menu Principal ---")
@@ -102,8 +105,8 @@ while current_state is not AppState.EXIT:
             print("1 - Criar conta")
             print("2 - Sair")
             print()
-            opcao = input("Escolha uma opção: ")
 
+            opcao = input("Escolha uma opção: ")
             match opcao:
                 case "0":
                     current_state = AppState.LOGIN
@@ -116,10 +119,6 @@ while current_state is not AppState.EXIT:
 
         case AppState.LOGIN:
             print("\n--- Login ---")
-            if login_attempts >= ATTEMPTS_BEFORE_LOCK:
-                current_state = AppState.LOCKED
-                locked_since = datetime.now()
-                continue
 
             email = input("Digite seu email: ")
             password = getpass("Digite sua senha: ")
@@ -135,14 +134,17 @@ while current_state is not AppState.EXIT:
                 login_attempts += 1
                 print("\nEmail ou senha incorretos. Tente novamente.")
                 print(f"Tentativas incorretas: {login_attempts}/{ATTEMPTS_BEFORE_LOCK}")
-            else:
-                consecutive_locks = 0
-                login_attempts = 0
-                locked_since = None
-                logged_account = account
-                current_state = AppState.AUTHENTICATED
-                print("\nLogin efetuado com sucesso!")
+                if login_attempts >= ATTEMPTS_BEFORE_LOCK:
+                    current_state = AppState.LOCKED
+                    locked_since = datetime.now()
+                continue
 
+            consecutive_locks = 0
+            login_attempts = 0
+            locked_since = None
+            logged_account = account
+            current_state = AppState.AUTHENTICATED
+            print("\nLogin efetuado com sucesso!")
         case AppState.CREATE_ACCOUNT:
             print("\n--- Criar Conta ---")
             email = input("Digite seu email (Deixe em branco para voltar ao menu): ")
@@ -163,7 +165,6 @@ while current_state is not AppState.EXIT:
                 continue
 
             nome = input("Digite seu nome: ")
-
             accounts[email] = Account(
                 email=email, password=PASSWORD_HASHER.hash(password), name=nome
             )
@@ -171,6 +172,7 @@ while current_state is not AppState.EXIT:
             current_state = AppState.MENU
 
         case AppState.AUTHENTICATED:
+            assert logged_account is not None
             print(f"\nBem-vindo(a), {logged_account.name}!")
             print("0 - Logout")
             print()
