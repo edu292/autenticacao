@@ -31,6 +31,14 @@ ATTEMPTS_BEFORE_LOCK = 3
 MIN_PASSWORD_LENGTH = 8
 PASSWORD_HASHER = PasswordHasher()
 
+SYMBOLS = set(string.punctuation)
+CHARACTER_RULES = {
+    "Sua senha deve conter pelo menos uma letra maiúscula": str.isupper,
+    "Sua senha deve conter pelo menos uma letra minúscula": str.islower,
+    "Sua senha deve conter pelo menos um número": str.isdigit,
+    "Sua senha deve conter pelo menos um símbolo": lambda char: char in SYMBOLS,
+}
+
 
 accounts: dict[str, Account] = {}
 login_attempts = 0
@@ -42,37 +50,25 @@ logged_account = None
 
 def validate_password(password: str) -> tuple[bool, list[str]]:
     errors: list[str] = []
+
     if len(password) < MIN_PASSWORD_LENGTH:
         errors.append(
-            f"Sua senha deve conter pelo menos {MIN_PASSWORD_LENGTH} caracteres."
+            f"Sua senha deve conter pelo menos {MIN_PASSWORD_LENGTH} caracteres"
         )
 
-    no_uppercase = True
-    no_lowercase = True
-    no_symbol = True
-    no_number = True
+    unmet_rules = CHARACTER_RULES.copy()
 
     for character in password:
-        if not (no_uppercase or no_lowercase or no_symbol or no_number):
+        if not unmet_rules:
             break
 
-        if character.isupper():
-            no_uppercase = False
-        elif character.islower():
-            no_lowercase = False
-        elif character in string.punctuation:
-            no_symbol = False
-        elif character.isdigit():
-            no_number = False
+        for error_msg in list(unmet_rules.keys()):
+            test_function = unmet_rules[error_msg]
 
-    if no_uppercase:
-        errors.append("Sua senha deve conter pelo menos uma letra maiúscula.")
-    if no_lowercase:
-        errors.append("Sua senha deve conter pelo menos uma letra minúscula.")
-    if no_symbol:
-        errors.append("Sua senha deve conter pelo menos um símbolo.")
-    if no_number:
-        errors.append("Sua senha deve conter pelo menos um número.")
+            if test_function(character):
+                del unmet_rules[error_msg]
+
+    errors.extend(unmet_rules.keys())
 
     is_valid = len(errors) == 0
     return is_valid, errors
