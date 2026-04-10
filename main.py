@@ -1,10 +1,10 @@
+import string
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from getpass import getpass
-import string
-from typing import Callable
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
@@ -19,7 +19,7 @@ class AppState(Enum):
     EXIT = auto()
 
 
-@dataclass
+@dataclass(slots=True)
 class Account:
     email: str
     password: str
@@ -120,8 +120,12 @@ while current_state is not AppState.EXIT:
         case AppState.LOGIN:
             print("\n--- Login ---")
 
-            email = input("Digite seu email: ")
-            password = getpass("Digite sua senha: ")
+            email = input("Digite seu Email (Deixe em branco para voltar ao menu): ")
+            if not email:
+                current_state = AppState.MENU
+                continue
+
+            password = getpass("Digite sua Senha: ")
 
             account = accounts.get(email)
             login_success = False
@@ -162,6 +166,11 @@ while current_state is not AppState.EXIT:
             if not valid:
                 print("\nSenha inválida:")
                 print(*errors, sep="\n")
+                continue
+
+            confirm_password = getpass("Confirme sua Senha: ")
+            if password != confirm_password:
+                print("A senha e sua confirmação não batem.")
                 continue
 
             nome = input("Digite seu nome: ")
